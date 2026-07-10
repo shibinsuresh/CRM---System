@@ -24,5 +24,15 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
+
+        User::updateOrCreate(
+            ['email' => 'rep@crm.test'],
+            [
+                'name' => 'Sales Rep',
+                'password' => Hash::make('password123'),
+                'role' => 'sales_rep',
+                'email_verified_at' => now(),
+            ]
+        );
     }
 }

@@ -1,12 +1,21 @@
 <script setup>
+import { ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { Inertia } from '@inertiajs/inertia';
+import debounce from 'lodash/debounce';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout.vue';
 import Pagination from '../../Components/Pagination.vue';
 
-defineProps({
+const props = defineProps({
     contacts: Object,
+    filters: Object,
 });
+
+const search = ref(props.filters.search || '');
+
+watch(search, debounce((value) => {
+    Inertia.get('/contacts', { search: value }, { preserveState: true, replace: true });
+}, 300));
 
 const destroy = (id) => {
     if (confirm('Delete this contact?')) {
@@ -22,6 +31,10 @@ const destroy = (id) => {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1 class="h3 mb-0">Contacts</h1>
             <Link href="/contacts/create" class="btn btn-primary">+ Add Contact</Link>
+        </div>
+
+        <div class="mb-3" style="max-width: 320px;">
+            <input v-model="search" type="search" class="form-control" placeholder="Search contacts…" />
         </div>
 
         <div class="card shadow-sm border-0">

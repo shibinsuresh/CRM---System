@@ -42,4 +42,20 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    /**
+     * Is this user an administrator?
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Can this user see/manage every record (admins and managers)?
+     */
+    public function canManageAll(): bool
+    {
+        return in_array($this->role, ['admin', 'manager'], true);
+    }
 }

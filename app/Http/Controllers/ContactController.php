@@ -17,13 +17,25 @@ class ContactController extends Controller
     /**
      * List contacts.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $search = $request->input('search');
+
         return Inertia::render('Contacts/Index', [
-            'contacts' => Contact::with(['company', 'owner'])
+            'contacts' => Contact::visibleTo(auth()->user())
+                ->with(['company', 'owner'])
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($qq) use ($search) {
+                        $qq->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    });
+                })
                 ->latest()
                 ->paginate(10)
                 ->withQueryString(),
+            'filters' => ['search' => $search],
         ]);
     }
 
@@ -33,7 +45,7 @@ class ContactController extends Controller
     public function create()
     {
         return Inertia::render('Contacts/Create', [
-            'companies' => Company::orderBy('name')->get(['id', 'name']),
+            'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -55,9 +67,11 @@ class ContactController extends Controller
      */
     public function edit(Contact $contact)
     {
+        $this->authorize('manage-record', $contact);
+
         return Inertia::render('Contacts/Edit', [
             'contact' => $contact,
-            'companies' => Company::orderBy('name')->get(['id', 'name']),
+            'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -66,6 +80,8 @@ class ContactController extends Controller
      */
     public function update(Request $request, Contact $contact)
     {
+        $this->authorize('manage-record', $contact);
+
         $data = $this->validateContact($request);
 
         $contact->update($data);
@@ -78,6 +94,8 @@ class ContactController extends Controller
      */
     public function destroy(Contact $contact)
     {
+        $this->authorize('manage-record', $contact);
+
         $contact->delete();
 
         return redirect()->route('contacts.index')->with('success', 'Contact deleted successfully.');

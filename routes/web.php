@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DealController;
+use App\Http\Controllers\LeadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -21,9 +26,9 @@ Route::get('/', function () {
     return Inertia::render('Welcome');
 });
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -32,6 +37,18 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('companies', CompanyController::class);
     Route::resource('contacts', ContactController::class);
+
+    Route::resource('leads', LeadController::class);
+    Route::post('/leads/{lead}/convert', [LeadController::class, 'convert'])->name('leads.convert');
+
+    Route::get('/pipeline', [DealController::class, 'pipeline'])->name('deals.pipeline');
+    Route::patch('/deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage');
+    Route::resource('deals', DealController::class);
+
+    Route::patch('/activities/{activity}/toggle', [ActivityController::class, 'toggle'])->name('activities.toggle');
+    Route::resource('activities', ActivityController::class);
+
+    Route::resource('users', UserController::class);
 });
 
 

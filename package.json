@@ -24,6 +24,7 @@
         "@inertiajs/inertia-vue3": "^0.6.0",
         "@inertiajs/progress": "^0.2.7",
         "@popperjs/core": "^2.11.6",
-        "bootstrap": "^5.3.0"
+        "bootstrap": "^5.3.0",
+        "vuedraggable": "^4.1.0"
     }
 }

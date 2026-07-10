@@ -30,10 +30,25 @@ const flashSuccess = computed(() => usePage().props.value.flash?.success);
                             <Link class="nav-link" href="/dashboard">Dashboard</Link>
                         </li>
                         <li class="nav-item">
+                            <Link class="nav-link" href="/leads">Leads</Link>
+                        </li>
+                        <li class="nav-item">
                             <Link class="nav-link" href="/contacts">Contacts</Link>
                         </li>
                         <li class="nav-item">
                             <Link class="nav-link" href="/companies">Companies</Link>
+                        </li>
+                        <li class="nav-item">
+                            <Link class="nav-link" href="/deals">Deals</Link>
+                        </li>
+                        <li class="nav-item">
+                            <Link class="nav-link" href="/pipeline">Pipeline</Link>
+                        </li>
+                        <li class="nav-item">
+                            <Link class="nav-link" href="/activities">Activities</Link>
+                        </li>
+                        <li class="nav-item" v-if="user?.role === 'admin'">
+                            <Link class="nav-link" href="/users">Users</Link>
                         </li>
                     </ul>
 

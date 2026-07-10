@@ -16,14 +16,24 @@ class CompanyController extends Controller
     /**
      * List companies.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $search = $request->input('search');
+
         return Inertia::render('Companies/Index', [
-            'companies' => Company::with('owner')
+            'companies' => Company::visibleTo(auth()->user())
+                ->with('owner')
                 ->withCount('contacts')
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($qq) use ($search) {
+                        $qq->where('name', 'like', "%{$search}%")
+                            ->orWhere('industry', 'like', "%{$search}%");
+                    });
+                })
                 ->latest()
                 ->paginate(10)
                 ->withQueryString(),
+            'filters' => ['search' => $search],
         ]);
     }
 
@@ -59,6 +69,8 @@ class CompanyController extends Controller
      */
     public function edit(Company $company)
     {
+        $this->authorize('manage-record', $company);
+
         return Inertia::render('Companies/Edit', [
             'company' => $company,
         ]);
@@ -69,6 +81,8 @@ class CompanyController extends Controller
      */
     public function update(Request $request, Company $company)
     {
+        $this->authorize('manage-record', $company);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:255'],
@@ -87,6 +101,8 @@ class CompanyController extends Controller
      */
     public function destroy(Company $company)
     {
+        $this->authorize('manage-record', $company);
+
         $company->delete();
 
         return redirect()->route('companies.index')->with('success', 'Company deleted successfully.');

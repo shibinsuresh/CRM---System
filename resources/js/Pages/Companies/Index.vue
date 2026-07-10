@@ -1,12 +1,21 @@
 <script setup>
+import { ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { Inertia } from '@inertiajs/inertia';
+import debounce from 'lodash/debounce';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout.vue';
 import Pagination from '../../Components/Pagination.vue';
 
-defineProps({
+const props = defineProps({
     companies: Object,
+    filters: Object,
 });
+
+const search = ref(props.filters.search || '');
+
+watch(search, debounce((value) => {
+    Inertia.get('/companies', { search: value }, { preserveState: true, replace: true });
+}, 300));
 
 const destroy = (id) => {
     if (confirm('Delete this company?')) {
@@ -22,6 +31,10 @@ const destroy = (id) => {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1 class="h3 mb-0">Companies</h1>
             <Link href="/companies/create" class="btn btn-primary">+ Add Company</Link>
+        </div>
+
+        <div class="mb-3" style="max-width: 320px;">
+            <input v-model="search" type="search" class="form-control" placeholder="Search companies…" />
         </div>
 
         <div class="card shadow-sm border-0">
