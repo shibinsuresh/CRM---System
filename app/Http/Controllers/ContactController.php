@@ -72,6 +72,7 @@ class ContactController extends Controller
         return Inertia::render('Contacts/Edit', [
             'contact' => $contact,
             'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
+            'notes' => $contact->notes()->with('user')->get(),
         ]);
     }
 

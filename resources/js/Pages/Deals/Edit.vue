@@ -1,12 +1,14 @@
 <script setup>
 import { Head, Link, useForm } from '@inertiajs/inertia-vue3';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout.vue';
+import NotesPanel from '../../Components/NotesPanel.vue';
 
 const props = defineProps({
     deal: Object,
     contacts: Array,
     companies: Array,
     stages: Array,
+    notes: Array,
 });
 
 const form = useForm({
@@ -82,6 +84,10 @@ const submit = () => form.put(`/deals/${props.deal.id}`);
                     </div>
                 </form>
             </div>
+        </div>
+
+        <div class="mt-3" style="max-width: 640px;">
+            <NotesPanel notable-type="deal" :notable-id="deal.id" :notes="notes" />
         </div>
     </AuthenticatedLayout>
 </template>

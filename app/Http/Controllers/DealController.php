@@ -83,7 +83,7 @@ class DealController extends Controller
         $this->authorize('manage-record', $deal);
 
         return Inertia::render('Deals/Edit', array_merge(
-            ['deal' => $deal],
+            ['deal' => $deal, 'notes' => $deal->notes()->with('user')->get()],
             $this->formOptions()
         ));
     }

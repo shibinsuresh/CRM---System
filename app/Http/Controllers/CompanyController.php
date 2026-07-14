@@ -73,6 +73,7 @@ class CompanyController extends Controller
 
         return Inertia::render('Companies/Edit', [
             'company' => $company,
+            'notes' => $company->notes()->with('user')->get(),
         ]);
     }
 

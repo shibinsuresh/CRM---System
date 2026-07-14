@@ -39,4 +39,9 @@ class Deal extends Model
     {
         return $this->belongsTo(User::class, 'owner_id');
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable')->latest();
+    }
 }

@@ -34,4 +34,9 @@ class Company extends Model
     {
         return $this->hasMany(Contact::class);
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable')->latest();
+    }
 }
