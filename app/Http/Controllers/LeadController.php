@@ -2,16 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Contact;
 use App\Models\Lead;
+use App\Repositories\ContactRepository;
+use App\Repositories\LeadRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class LeadController extends Controller
 {
-    public function __construct()
+    public const STATUSES = ['new', 'contacted', 'qualified', 'lost', 'converted'];
+
+    protected $leads;
+    protected $contacts;
+
+    public function __construct(LeadRepository $leads, ContactRepository $contacts)
     {
         $this->middleware('auth');
+        $this->leads = $leads;
+        $this->contacts = $contacts;
     }
 
     public function index(Request $request)
@@ -20,20 +28,9 @@ class LeadController extends Controller
         $status = $request->input('status');
 
         return Inertia::render('Leads/Index', [
-            'leads' => Lead::visibleTo(auth()->user())
-                ->with('owner')
-                ->when($search, function ($q) use ($search) {
-                    $q->where(function ($qq) use ($search) {
-                        $qq->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
-                })
-                ->when($status, fn ($q) => $q->where('status', $status))
-                ->latest()
-                ->paginate(10)
-                ->withQueryString(),
+            'leads' => $this->leads->paginateVisible($request->user(), $search, $status),
             'filters' => ['search' => $search, 'status' => $status],
-            'statuses' => ['new', 'contacted', 'qualified', 'lost', 'converted'],
+            'statuses' => self::STATUSES,
         ]);
     }
 
@@ -44,9 +41,7 @@ class LeadController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->validateLead($request);
-        $data['owner_id'] = $request->user()->id;
-        Lead::create($data);
+        $this->leads->create($this->validateLead($request), $request->user()->id);
 
         return redirect()->route('leads.index')->with('success', 'Lead created successfully.');
     }
@@ -64,8 +59,7 @@ class LeadController extends Controller
     {
         $this->authorize('manage-record', $lead);
 
-        $data = $this->validateLead($request);
-        $lead->update($data);
+        $this->leads->update($lead, $this->validateLead($request));
 
         return redirect()->route('leads.index')->with('success', 'Lead updated successfully.');
     }
@@ -74,7 +68,7 @@ class LeadController extends Controller
     {
         $this->authorize('manage-record', $lead);
 
-        $lead->delete();
+        $this->leads->delete($lead);
 
         return redirect()->route('leads.index')->with('success', 'Lead deleted successfully.');
     }
@@ -88,19 +82,21 @@ class LeadController extends Controller
 
         $parts = explode(' ', trim($lead->name), 2);
 
-        Contact::create([
+        $this->contacts->create([
             'first_name' => $parts[0],
             'last_name' => $parts[1] ?? null,
             'email' => $lead->email,
             'phone' => $lead->phone,
-            'owner_id' => $request->user()->id,
-        ]);
+        ], $request->user()->id);
 
-        $lead->update(['status' => 'converted']);
+        $this->leads->markConverted($lead);
 
         return redirect()->route('contacts.index')->with('success', 'Lead converted to contact.');
     }
 
+    /**
+     * Validate an incoming lead payload.
+     */
     private function validateLead(Request $request): array
     {
         return $request->validate([

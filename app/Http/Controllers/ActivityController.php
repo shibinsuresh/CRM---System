@@ -3,18 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
-use App\Models\Contact;
-use App\Models\Deal;
+use App\Models\User;
+use App\Repositories\ActivityRepository;
+use App\Repositories\ContactRepository;
+use App\Repositories\DealRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ActivityController extends Controller
 {
-    public const TYPES = ['call', 'meeting', 'email', 'task'];
+    protected $activities;
+    protected $contacts;
+    protected $deals;
 
-    public function __construct()
+    public function __construct(ActivityRepository $activities, ContactRepository $contacts, DealRepository $deals)
     {
         $this->middleware('auth');
+        $this->activities = $activities;
+        $this->contacts = $contacts;
+        $this->deals = $deals;
     }
 
     public function index(Request $request)
@@ -23,40 +30,31 @@ class ActivityController extends Controller
         $type = $request->input('type');
 
         return Inertia::render('Activities/Index', [
-            'activities' => Activity::visibleTo(auth()->user())
-                ->with(['contact', 'deal'])
-                ->when($search, fn ($q) => $q->where('subject', 'like', "%{$search}%"))
-                ->when($type, fn ($q) => $q->where('type', $type))
-                ->orderBy('completed')
-                ->orderByRaw('due_date IS NULL, due_date asc')
-                ->paginate(10)
-                ->withQueryString(),
+            'activities' => $this->activities->paginateVisible($request->user(), $search, $type),
             'filters' => ['search' => $search, 'type' => $type],
-            'types' => self::TYPES,
+            'types' => ActivityRepository::TYPES,
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return Inertia::render('Activities/Create', $this->formOptions());
+        return Inertia::render('Activities/Create', $this->formOptions($request->user()));
     }
 
     public function store(Request $request)
     {
-        $data = $this->validateActivity($request);
-        $data['owner_id'] = $request->user()->id;
-        Activity::create($data);
+        $this->activities->create($this->validateActivity($request), $request->user()->id);
 
         return redirect()->route('activities.index')->with('success', 'Activity created successfully.');
     }
 
-    public function edit(Activity $activity)
+    public function edit(Request $request, Activity $activity)
     {
         $this->authorize('manage-record', $activity);
 
         return Inertia::render('Activities/Edit', array_merge(
             ['activity' => $activity],
-            $this->formOptions()
+            $this->formOptions($request->user())
         ));
     }
 
@@ -64,8 +62,7 @@ class ActivityController extends Controller
     {
         $this->authorize('manage-record', $activity);
 
-        $data = $this->validateActivity($request);
-        $activity->update($data);
+        $this->activities->update($activity, $this->validateActivity($request));
 
         return redirect()->route('activities.index')->with('success', 'Activity updated successfully.');
     }
@@ -74,7 +71,7 @@ class ActivityController extends Controller
     {
         $this->authorize('manage-record', $activity);
 
-        $activity->delete();
+        $this->activities->delete($activity);
 
         return redirect()->route('activities.index')->with('success', 'Activity deleted successfully.');
     }
@@ -86,24 +83,27 @@ class ActivityController extends Controller
     {
         $this->authorize('manage-record', $activity);
 
-        $activity->update(['completed' => ! $activity->completed]);
+        $this->activities->toggle($activity);
 
         return redirect()->back();
     }
 
-    private function formOptions(): array
+    private function formOptions(User $user): array
     {
         return [
-            'types' => self::TYPES,
-            'contacts' => Contact::visibleTo(auth()->user())->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
-            'deals' => Deal::visibleTo(auth()->user())->orderBy('title')->get(['id', 'title']),
+            'types' => ActivityRepository::TYPES,
+            'contacts' => $this->contacts->options($user),
+            'deals' => $this->deals->options($user),
         ];
     }
 
+    /**
+     * Validate an incoming activity payload.
+     */
     private function validateActivity(Request $request): array
     {
         return $request->validate([
-            'type' => ['required', 'in:'.implode(',', self::TYPES)],
+            'type' => ['required', 'in:'.implode(',', ActivityRepository::TYPES)],
             'subject' => ['required', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
             'due_date' => ['nullable', 'date'],

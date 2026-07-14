@@ -2,108 +2,79 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Contact;
+use App\Repositories\CompanyRepository;
+use App\Repositories\ContactRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ContactController extends Controller
 {
-    public function __construct()
+    protected $contacts;
+    protected $companies;
+
+    public function __construct(ContactRepository $contacts, CompanyRepository $companies)
     {
         $this->middleware('auth');
+        $this->contacts = $contacts;
+        $this->companies = $companies;
     }
 
-    /**
-     * List contacts.
-     */
     public function index(Request $request)
     {
         $search = $request->input('search');
 
         return Inertia::render('Contacts/Index', [
-            'contacts' => Contact::visibleTo(auth()->user())
-                ->with(['company', 'owner'])
-                ->when($search, function ($q) use ($search) {
-                    $q->where(function ($qq) use ($search) {
-                        $qq->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%");
-                    });
-                })
-                ->latest()
-                ->paginate(10)
-                ->withQueryString(),
+            'contacts' => $this->contacts->paginateVisible($request->user(), $search),
             'filters' => ['search' => $search],
         ]);
     }
 
-    /**
-     * Show the create form.
-     */
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('Contacts/Create', [
-            'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
+            'companies' => $this->companies->options($request->user()),
         ]);
     }
 
-    /**
-     * Store a new contact.
-     */
     public function store(Request $request)
     {
-        $data = $this->validateContact($request);
-
-        $data['owner_id'] = $request->user()->id;
-        Contact::create($data);
+        $this->contacts->create($this->validateContact($request), $request->user()->id);
 
         return redirect()->route('contacts.index')->with('success', 'Contact created successfully.');
     }
 
-    /**
-     * Show the edit form.
-     */
-    public function edit(Contact $contact)
+    public function edit(Request $request, Contact $contact)
     {
         $this->authorize('manage-record', $contact);
 
         return Inertia::render('Contacts/Edit', [
             'contact' => $contact,
-            'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
+            'companies' => $this->companies->options($request->user()),
             'notes' => $contact->notes()->with('user')->get(),
         ]);
     }
 
-    /**
-     * Update a contact.
-     */
     public function update(Request $request, Contact $contact)
     {
         $this->authorize('manage-record', $contact);
 
-        $data = $this->validateContact($request);
-
-        $contact->update($data);
+        $this->contacts->update($contact, $this->validateContact($request));
 
         return redirect()->route('contacts.index')->with('success', 'Contact updated successfully.');
     }
 
-    /**
-     * Delete a contact.
-     */
     public function destroy(Contact $contact)
     {
         $this->authorize('manage-record', $contact);
 
-        $contact->delete();
+        $this->contacts->delete($contact);
 
         return redirect()->route('contacts.index')->with('success', 'Contact deleted successfully.');
     }
 
     /**
-     * Shared validation rules for storing/updating a contact.
+     * Validate an incoming contact payload.
      */
     private function validateContact(Request $request): array
     {

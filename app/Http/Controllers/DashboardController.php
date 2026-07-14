@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\Lead;
+use App\Repositories\DealRepository;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -23,7 +24,7 @@ class DashboardController extends Controller
 
         // Deals grouped by stage (count + total value) for the chart.
         $byStage = [];
-        foreach (DealController::STAGES as $stage) {
+        foreach (DealRepository::STAGES as $stage) {
             $rows = Deal::visibleTo($user)->where('stage', $stage);
             $byStage[] = [
                 'stage' => $stage,

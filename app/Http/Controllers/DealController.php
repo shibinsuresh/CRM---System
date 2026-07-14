@@ -2,22 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Deal;
+use App\Models\User;
+use App\Repositories\CompanyRepository;
+use App\Repositories\ContactRepository;
+use App\Repositories\DealRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class DealController extends Controller
 {
-    /**
-     * The pipeline stages, in order.
-     */
-    public const STAGES = ['new', 'qualified', 'proposal', 'won', 'lost'];
+    protected $deals;
+    protected $contacts;
+    protected $companies;
 
-    public function __construct()
+    public function __construct(DealRepository $deals, ContactRepository $contacts, CompanyRepository $companies)
     {
         $this->middleware('auth');
+        $this->deals = $deals;
+        $this->contacts = $contacts;
+        $this->companies = $companies;
     }
 
     public function index(Request $request)
@@ -26,65 +30,45 @@ class DealController extends Controller
         $stage = $request->input('stage');
 
         return Inertia::render('Deals/Index', [
-            'deals' => Deal::visibleTo(auth()->user())
-                ->with(['contact', 'company', 'owner'])
-                ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
-                ->when($stage, fn ($q) => $q->where('stage', $stage))
-                ->latest()
-                ->paginate(10)
-                ->withQueryString(),
+            'deals' => $this->deals->paginateVisible($request->user(), $search, $stage),
             'filters' => ['search' => $search, 'stage' => $stage],
-            'stages' => self::STAGES,
+            'stages' => DealRepository::STAGES,
         ]);
     }
 
     /**
      * The Kanban pipeline board: deals grouped by stage.
      */
-    public function pipeline()
+    public function pipeline(Request $request)
     {
-        $deals = Deal::visibleTo(auth()->user())
-            ->with(['contact', 'company'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $board = [];
-        foreach (self::STAGES as $stage) {
-            $stageDeals = $deals->where('stage', $stage)->values();
-            $board[] = [
-                'stage' => $stage,
-                'deals' => $stageDeals,
-                'total' => $stageDeals->sum('value'),
-            ];
-        }
-
         return Inertia::render('Deals/Pipeline', [
-            'board' => $board,
-            'stages' => self::STAGES,
+            'board' => $this->deals->pipeline($request->user()),
+            'stages' => DealRepository::STAGES,
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return Inertia::render('Deals/Create', $this->formOptions());
+        return Inertia::render('Deals/Create', $this->formOptions($request->user()));
     }
 
     public function store(Request $request)
     {
-        $data = $this->validateDeal($request);
-        $data['owner_id'] = $request->user()->id;
-        Deal::create($data);
+        $this->deals->create($this->validateDeal($request), $request->user()->id);
 
         return redirect()->route('deals.index')->with('success', 'Deal created successfully.');
     }
 
-    public function edit(Deal $deal)
+    public function edit(Request $request, Deal $deal)
     {
         $this->authorize('manage-record', $deal);
 
         return Inertia::render('Deals/Edit', array_merge(
-            ['deal' => $deal, 'notes' => $deal->notes()->with('user')->get()],
-            $this->formOptions()
+            [
+                'deal' => $deal,
+                'notes' => $deal->notes()->with('user')->get(),
+            ],
+            $this->formOptions($request->user())
         ));
     }
 
@@ -92,8 +76,7 @@ class DealController extends Controller
     {
         $this->authorize('manage-record', $deal);
 
-        $data = $this->validateDeal($request);
-        $deal->update($data);
+        $this->deals->update($deal, $this->validateDeal($request));
 
         return redirect()->route('deals.index')->with('success', 'Deal updated successfully.');
     }
@@ -102,7 +85,7 @@ class DealController extends Controller
     {
         $this->authorize('manage-record', $deal);
 
-        $deal->delete();
+        $this->deals->delete($deal);
 
         return redirect()->route('deals.index')->with('success', 'Deal deleted successfully.');
     }
@@ -115,29 +98,32 @@ class DealController extends Controller
         $this->authorize('manage-record', $deal);
 
         $data = $request->validate([
-            'stage' => ['required', 'in:'.implode(',', self::STAGES)],
+            'stage' => ['required', 'in:'.implode(',', DealRepository::STAGES)],
         ]);
 
-        $deal->update($data);
+        $this->deals->updateStage($deal, $data['stage']);
 
         return redirect()->back();
     }
 
-    private function formOptions(): array
+    private function formOptions(User $user): array
     {
         return [
-            'contacts' => Contact::visibleTo(auth()->user())->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
-            'companies' => Company::visibleTo(auth()->user())->orderBy('name')->get(['id', 'name']),
-            'stages' => self::STAGES,
+            'contacts' => $this->contacts->options($user),
+            'companies' => $this->companies->options($user),
+            'stages' => DealRepository::STAGES,
         ];
     }
 
+    /**
+     * Validate an incoming deal payload.
+     */
     private function validateDeal(Request $request): array
     {
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'value' => ['required', 'numeric', 'min:0'],
-            'stage' => ['required', 'in:'.implode(',', self::STAGES)],
+            'stage' => ['required', 'in:'.implode(',', DealRepository::STAGES)],
             'expected_close_date' => ['nullable', 'date'],
             'contact_id' => ['nullable', 'exists:contacts,id'],
             'company_id' => ['nullable', 'exists:companies,id'],
